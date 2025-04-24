@@ -196,36 +196,57 @@ class PlayerAtomInstance extends AtomInstance {
         this.speed = playerSpeed;           // Player's movement speed
         
     }
-
-    // You can override the update method if the player's movement is different
-    
+    // The update method for player movement    
     update() {
-        this.vx = 0; // Reset horizontal velocity each frame
-        this.vy = 0; // Reset vertical velocity each frame
-    
+        this.vx = 0;
+        this.vy = 0;
+
         if (isWPressed) {
-            this.vy = -1; // Move up
+            this.vy = -1;
         }
         if (isAPressed) {
-            this.vx = -1; // Move left
+            this.vx = -1;
         }
         if (isSPressed) {
-            this.vy = 1;  // Move down
+            this.vy = 1;
         }
         if (isDPressed) {
-            this.vx = 1;  // Move right
+            this.vx = 1;
         }
-    
-        // Normalize diagonal movement to prevent faster speed
+
         if (this.vx !== 0 && this.vy !== 0) {
             this.vx *= Math.SQRT1_2;
             this.vy *= Math.SQRT1_2;
         }
-    
+
         this.x += this.vx * this.speed;
         this.y += this.vy * this.speed;
-    
-        // Apply jitter
+
+        // Get canvas dimensions
+        const canvas = document.querySelector('canvas'); 
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        // Wall collision detection
+        const effectiveRadius = this.entity.size / 10; // Use player's radius
+
+        if (this.x - effectiveRadius < 0) {
+            this.x = effectiveRadius; // Keep within bounds
+            this.vx = 0;             // Stop movement
+        }
+        if (this.x + effectiveRadius > canvasWidth) {
+            this.x = canvasWidth - effectiveRadius;
+            this.vx = 0;
+        }
+        if (this.y - effectiveRadius < 0) {
+            this.y = effectiveRadius;
+            this.vy = 0;
+        }
+        if (this.y + effectiveRadius > canvasHeight) {
+            this.y = canvasHeight - effectiveRadius;
+            this.vy = 0;
+        }
+
         this.x += (Math.random() - 0.5) * this.entity.jitter * 0.5;
         this.y += (Math.random() - 0.5) * this.entity.jitter * 0.5;
     }
