@@ -28,3 +28,8 @@ canvas {
     cursor: pointer;
     margin-top: 20px;
 }
+
+#timerDisplay {
+    color: white;
+    font-size: 14px;
+}
