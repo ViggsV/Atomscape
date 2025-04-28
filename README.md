@@ -37,8 +37,8 @@ Complete compounds to earn points and continue your journey through the colorful
 
 ## Links
 
-- Play Demo: link
-- GitHub Repo: link
+- Play Demo: https://viggsv.github.io/Atomscape/
+- GitHub Repo: https://github.com/ViggsV/Atomscape.git
 
 ---
 
