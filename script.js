@@ -201,9 +201,4 @@ const ENTITY_TYPES = [
     startTime = Date.now();
     gameRunning = true;
     requestAnimationFrame(gameLoop);
-    if (gameMusic) {
-      gameMusic.play().catch(error => {
-        console.error("Autoplay prevented:", error);
-      });
-    }
   });
