@@ -1,294 +1,209 @@
-// if scrolled to the top = win
-// if hit a reactive element = lose
-// if hit a non-reactive element = slow down
-// Energy bar = 100%; dodge left or right = -40%; regeneration = wow druid regen
-// Max game length = 5 minutes
-
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-const startButton = document.getElementById("startButton");
-const timerDisplay = document.getElementById('timerDisplay');
-
-
-// initialise game time
-let gameRunning = false;
-let startTime = null;
-let timerInterval = null;
-let elapsedTime = 0; 
-
-startButton.addEventListener("click", startGame);
-
-function startGame() {
-    if (!gameRunning) {
-        gameRunning = true;
-        startTime = Date.now();
-        timerInterval = setInterval(updateTimer, 1000); // update every second
-    }
-}
-
-function updateTimer() { 
-    if (gameRunning) {
-        const currentTime = Date.now();
-        elapsedTime = Math.floor((currentTime - startTime) / 1000); // in seconds
-        timerDisplay.textContent = `Time: ${elapsedTime}s`;
-    }
-}
-
-function endGame() {
-    gameRunning = false;
-    clearInterval(timerInterval);
-    alert(`Game Over! You survived for ${elapsedTime} seconds.`);
-    // reset game state
-    elapsedTime = 0;
-    timerDisplay.textContent = `Time: 0s`;
-}
-
-
-// global speed which increases over time
-let globalSpeed = 1; // 1x speed of all atoms, as the game progresses, this will increase#
-let playerSpeed = 1; // player speed, this will increase as the player picks up energy
-let playerPosition = 0; // player position, this will increase as the player moves up in the atmosphere
-const maxPosition = 4000; // max position to win the game
-// as the player moves, other atom velocity increase. If you increase player speed. Rate of velocity increase.
-// I need to make elements move faster as player goes up in the atmosphere. So I need to keep track of players position and speed. 
-// Players position doesn't have to be an actual co-oordinate. It can just be a mathematical expression.
-// Player x = 0. 
-// player speed = 1 per second.
-// When player x = 4000, win the game
-// spawning atoms at semi-random intervals, depending on the player position. If its below 1000, spawn lots of them with slow speed.
-// spawning below 2000, spawn less with medium speed
-// spawning below 3000, spawn even less with fast speed.
-// spawning above 3000, spawn very few with very fast speed.
-// on startGame, start spawning atoms.  
-
-
-// spawnRate decreses as player position increases
-function spawnRate(playerPosition) {
-    if (playerPosition < 1000) {
-        return Math.random() * 0.5 + 2; // very fast speed
-    }
-    else if (playerPosition < 2000) {
-        return Math.random() * 0.5 + 1.5; // fast speed
-
-    } else if (playerPosition < 3000) {
-        return Math.random() * 0.5 + 1; // medium speed
-    } else {
-        return Math.random() * 0.5 + 0.5; // slow speed
-        
-    }
-}
-
-// atomSpeed increases as player position increases
-function atomSpeed(playerPosition) {
-    if (playerPosition < 1000) {
-        return Math.random() * 0.5 + 0.1; // slow speed
-    }
-    else if (playerPosition < 2000) {
-        return Math.random() * 0.5 + 0.2; // medium speed
-    } else if (playerPosition < 3000) {
-        return Math.random() * 0.5 + 0.5; // fast speed
-    } else {
-        return Math.random() * 0.5 + 1; // very fast speed
-        
-    }
-}
-
-// class for game entities (atoms, compounds, etc.)
+// --- Entity Config --- 
+// 'Pull' has no functionality yet, but could be used for a electromagnetic-like forces
+// 'Reactivity' is whether the atom can bond with others
+// 'Size' is in the atoms relative 'Van der Waals radius' which later is divided by 10 to get the actual radius in pixels
 class Entity {
-    constructor(name, color, pull, size, jitter, reactivity,) {
-        this.name = name;
-        this.color = color;  
-        this.pull = pull; // 0-1
-        this.size = size; // 0-200  
-        this.jitter = jitter; // 0-1 
-        this.reactivity = reactivity; // true/false
-    }
+  constructor(name, symbol, color, pull, size, jitter, reactivity, spawnChance) {
+    this.name = name;
+    this.symbol = symbol;
+    this.color = color;
+    this.pull = pull;
+    this.size = size;
+    this.jitter = jitter;
+    this.reactivity = reactivity;
+    this.spawnChance = spawnChance;
+  }
 }
-// size is in picometers, we will divide by 10 to get pixels
-const playerAtom = new Entity("Player", "blue", 0, 120, 0, false);
-const nitrogenAtom = new Entity("Nitrogen", "green", 0.1, 155, 0.2, false);
-const hydrogenAtom = new Entity("Hydrogen", "grey", 0.3, 120, 0.9, true);
-const oxygenAtom = new Entity("Oxygen", "red", 0.7, 152, 0.3, true);
-const oxygenPair = new Entity("OxygenPair", "orange", 0.5, 275, 0.3, true);
-const fluorineAtom = new Entity("Fluorine", "yellow", 0.9, 147, 0.6, true);
-const carbonDioxideCompound = new Entity("Carbon Dioxide", "black", 0.1, 444, 0.4, false);
 
+const ENTITY_TYPES = [
+  new Entity('Energy', '⚡', 'pink', 0, 100, 0, false, 0), // 
+  new Entity('Hydrogen',     'H',  'grey',   0.3, 120, 0.9, true,  0.40),
+  new Entity('Oxygen',       'O',  'red',    0.7, 152, 0.3, true,  0.30),
+  new Entity('Nitrogen',     'N',  'green',  0.1, 155, 0.2, true,  0.20),
+  new Entity('Fluorine',     'F',  'yellow', 0.9, 147, 0.6, true,  0.05),
+  new Entity('CarbonDioxide','CO₂','black',  0.1, 444, 0.4, true,  0.05)
+];
 
-// class for live atom instances in the game
-class AtomInstance {
-    constructor(entityType, x) {
-        this.entity = entityType;
-        this.x = x;
-        this.y = -100; // start off screen
-        this.vx = 0;
-        this.vy = Math.random() * 1 + 1; // moving down
+  
+  // --- Globals & UI ---
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const startButton = document.getElementById("startButton");
+  const timerDisplay = document.getElementById("timerDisplay");
+  const targetDisplay = document.getElementById("targetDisplay");
+  const bondedDisplay = document.getElementById("bondedDisplay");
+  
+  let gameRunning = false;
+  let startTime = 0;
+  let elapsedSeconds = 0;
+  let atoms = [];
+  let player;
+  
+  // --- Target Compound Setup ---
+  // e.g. H2O = [ 'Hydrogen', 'Hydrogen', 'Oxygen' ]
+  let targetCompound = [];
+  let bonded = [];
+  function chooseTarget() {
+    // For demo, always water H2O
+    targetCompound = ['Hydrogen','Hydrogen','Oxygen'];
+    bonded = [];
+    renderTarget();
+    renderBonded();
+  }
+  function renderTarget() {
+    targetDisplay.textContent = 'Target: ' + targetCompound.join('-');
+  }
+  function renderBonded() {
+    bondedDisplay.textContent = 'Bonded: ' + (bonded.length ? bonded.join('-') : 'None');
+  }
+  
+  // --- Weighted Picker ---
+  function pickRandomEntityType() {
+    const r = Math.random(); let sum = 0;
+    for (let t of ENTITY_TYPES) {
+      sum += t.spawnChance;
+      if (r <= sum) return t;
     }
-
+    return ENTITY_TYPES[ENTITY_TYPES.length-1];
+  }
+  
+  // --- AtomInstance & Player ---
+  class AtomInstance {
+    constructor(entity, x) {
+      this.entity = entity;
+      this.x = x;
+      this.baseX = x; // Store the original x position
+      this.y = -entity.size / 10;
+      this.vy = (Math.random() * 0.5 + 0.5);
+      this.jitterOffset = 0;
+    }
+  
     update() {
-        // basic movement
-        this.x += this.vx;
-        this.y += this.vy;
-
-        // apply jitter
-        this.x += (Math.random() - 0.5) * this.entity.jitter * 2;
-        this.y += (Math.random() - 0.5) * this.entity.jitter * 2;
+      this.y += this.vy;
+  
+      // Jitter logic
+      if (this.entity.jitter > 0) {
+        this.jitterOffset = (Math.random() - 0.5) * this.entity.jitter * 5;
+        this.x = this.baseX + this.jitterOffset;
+      }
     }
-
-    draw(ctx) {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.entity.size / 10, 0, Math.PI * 2); // scaled down size
-        ctx.fillStyle = this.entity.color;
-        ctx.fill();
+  
+    draw() {
+      const r = this.entity.size / 10;
+  
+      // Draw the circle
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = this.entity.color;
+      ctx.fill();
+      ctx.closePath();
+  
+      // Draw the symbol
+      ctx.fillStyle = "#fff";
+      ctx.font = `${r}px Share Tech Mono`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(this.entity.symbol, this.x, this.y);
     }
-}
-
-// player movement controls
-let isWPressed = false;
-let isAPressed = false;
-let isSPressed = false;
-let isDPressed = false;
-
-// is key pressed
-window.addEventListener('keydown', (event) => {
-    switch (event.key) {
-        case 'w':
-            isWPressed = true;
-            break;
-        case 'a':
-            isAPressed = true;
-            break;
-        case 's':
-            isSPressed = true;
-            break;
-        case 'd':
-            isDPressed = true;
-            break;
+  }
+  class PlayerAtomInstance extends AtomInstance {
+    constructor(entity) {
+      super(entity, canvas.width/2);
+      this.y = canvas.height*0.8;
+      this.speed = 2;
     }
-});
-
-// is key released
-window.addEventListener('keyup', (event) => {
-    switch (event.key) {
-        case 'w':
-            isWPressed = false;
-            break;
-        case 'a':
-            isAPressed = false;
-            break;
-        case 's':
-            isSPressed = false;
-            break;
-        case 'd':
-            isDPressed = false;
-            break;
-    }
-});
-// player class
-
-class PlayerAtomInstance extends AtomInstance {
-    constructor(entityType) {
-        super(entityType); // Call the constructor of AtomInstance
-        this.x = 400;          // Override the initial x position for the player
-        this.y = 550;          // Override the initial y position for the player
-        this.isPlayer = true;      // Add a specific property for the player
-        this.vx = 0;              // Player starts with no horizontal velocity
-        this.vy = 0;              // Player starts with no vertical velocity (initially)
-        this.speed = playerSpeed;           // Player's movement speed
-        
-    }
-    // The update method for player movement    
     update() {
-        this.vx = 0;
-        this.vy = 0;
-
-        if (isWPressed) {
-            this.vy = -1;
-        }
-        if (isAPressed) {
-            this.vx = -1;
-        }
-        if (isSPressed) {
-            this.vy = 1;
-        }
-        if (isDPressed) {
-            this.vx = 1;
-        }
-
-        if (this.vx !== 0 && this.vy !== 0) {
-            this.vx *= Math.SQRT1_2;
-            this.vy *= Math.SQRT1_2;
-        }
-
-        this.x += this.vx * this.speed;
-        this.y += this.vy * this.speed;
-
-        // Get canvas dimensions
-        const canvas = document.querySelector('canvas'); 
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-
-        // Wall collision detection
-        const effectiveRadius = this.entity.size / 10; // Use player's radius
-
-        if (this.x - effectiveRadius < 0) {
-            this.x = effectiveRadius; // Keep within bounds
-            this.vx = 0;             // Stop movement
-        }
-        if (this.x + effectiveRadius > canvasWidth) {
-            this.x = canvasWidth - effectiveRadius;
-            this.vx = 0;
-        }
-        if (this.y - effectiveRadius < 0) {
-            this.y = effectiveRadius;
-            this.vy = 0;
-        }
-        if (this.y + effectiveRadius > canvasHeight) {
-            this.y = canvasHeight - effectiveRadius;
-            this.vy = 0;
-        }
-
-        this.x += (Math.random() - 0.5) * this.entity.jitter * 0.5;
-        this.y += (Math.random() - 0.5) * this.entity.jitter * 0.5;
+      let dx=0, dy=0;
+      if (keys.w) dy=-1; if (keys.s) dy=1;
+      if (keys.a) dx=-1; if (keys.d) dx=1;
+      if (dx&&dy) { dx*=Math.SQRT1_2; dy*=Math.SQRT1_2; }
+      this.x = Math.min(Math.max(this.x+dx*this.speed, this.entity.size/10), canvas.width - this.entity.size/10);
+      this.y = Math.min(Math.max(this.y+dy*this.speed, this.entity.size/10), canvas.height - this.entity.size/10);
     }
-
-    // The draw method
-    draw(ctx) {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.entity.size / 10, 0, Math.PI * 2);
-        ctx.fillStyle = this.entity.color; 
-        ctx.fill();
+    draw() { super.draw(); }
+  }
+  
+  // --- Input ---
+  const keys = {w:false,a:false,s:false,d:false};
+  window.addEventListener('keydown', e=>{ if(e.key in keys) keys[e.key]=true; });
+  window.addEventListener('keyup',   e=>{ if(e.key in keys) keys[e.key]=false; });
+  
+  // --- Spawning ---
+  function spawnAtoms() {
+    if (Math.random()<0.02) {
+      const type = pickRandomEntityType();
+      const x = Math.random()*(canvas.width - type.size/10*2) + type.size/10;
+      atoms.push(new AtomInstance(type,x));
     }
-
-
-}
-
-let atoms = [];
-let player = [];
-
-player.push(new PlayerAtomInstance(playerAtom)); // player atom
-
-// spawn a few atoms
-atoms.push(new AtomInstance(oxygenAtom, 100));
-atoms.push(new AtomInstance(nitrogenAtom, 200));
-
-
-function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    for (let atom of atoms) {
-        atom.update();
-        atom.draw(ctx);
+  }
+  
+  // --- Timer ---
+  function updateTimer() {
+    elapsedSeconds = Math.floor((Date.now()-startTime)/1000);
+    timerDisplay.textContent = `Time: ${elapsedSeconds}s`;
+  }
+  
+  // --- Bonding & Collision ---
+  function checkCollisions() {
+    for (let i=atoms.length-1; i>=0; i--) {
+      const atom = atoms[i];
+      const dx = atom.x - player.x;
+      const dy = atom.y - player.y;
+      const dist = Math.hypot(dx,dy);
+      const rSum = atom.entity.size/10 + player.entity.size/10;
+      if (dist < rSum) {
+        atoms.splice(i,1);
+        if (!atom.entity.reactivity) {
+          // inert, just ignore
+        } else {
+          // reactive: attempt to bond
+          if (bonded.length < targetCompound.length && atom.entity.name === targetCompound[bonded.length]) {
+            bonded.push(atom.entity.name);
+            renderBonded();
+            if (bonded.length === targetCompound.length) winGame();
+          } else {
+            loseGame();
+          }
+        }
+      }
     }
-
-    for (let atom of player) {
-        atom.update();
-        atom.draw(ctx);
-    }
-
+  }
+  
+  // --- Win/Lose ---
+  function winGame() {
+    gameRunning=false;
+    alert('You formed ' + targetCompound.join('-') + '! You win!');
+  }
+  function loseGame() {
+    gameRunning=false;
+    alert('Wrong bond! Game over.');
+  }
+  
+  // --- Main Loop ---
+  function gameLoop() {
+    if (!gameRunning) return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    updateTimer(); spawnAtoms();
+    player.update(); player.draw();
+    for (let atom of atoms) { atom.update(); atom.draw(); }
+    checkCollisions();
+    atoms = atoms.filter(a=>a.y < canvas.height + a.entity.size/10);
+    if (gameRunning) requestAnimationFrame(gameLoop);
+  }
+  
+  // --- Start ---
+  startButton.addEventListener('click', () => {
+    if (gameRunning) return;
+    chooseTarget();
+    atoms = [];
+    const energyType = ENTITY_TYPES.find(e => e.name === 'Energy');
+    player = new PlayerAtomInstance(energyType);
+    startTime = Date.now();
+    gameRunning = true;
     requestAnimationFrame(gameLoop);
-}
-
-gameLoop();
-
-
-
+    if (gameMusic) {
+      gameMusic.play().catch(error => {
+        console.error("Autoplay prevented:", error);
+      });
+    }
+  });
