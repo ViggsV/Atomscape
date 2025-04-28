@@ -4,14 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Atomscape</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="styles.css">
     <script src="script.js" defer></script>
+    
 </head>
 <body>
     <main>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <button id="startButton">Start Game</button>
     <div id="timerDisplay">Time: 0</div>
+    <div id="targetDisplay"></div>
+    <div id="bondedDisplay"></div>
 </main>
+<audio id="gameMusic" loop autoplay>
+    <source id="playMusic" src="/assets/music/8-bit-music-on.mp3" type="audio/mp3">
+  Your browser does not support the audio element.
+  </audio>
 </body>
 </html>
